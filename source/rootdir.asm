@@ -1,6 +1,6 @@
 file0:
-    .name: 'KERNEL  '
-    .ext: 'EXE'
+    .name: db 'KERNEL  '
+    .ext: db 'EXE'
     .attr: db 0b00000111
     .reserved: db 0
     .timems: db 0

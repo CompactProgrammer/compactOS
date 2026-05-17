@@ -3,21 +3,21 @@ bits 16
 cpu 386
 
 header:
-    .sign: db 'EX16' ; .EXE file signature
-    .extrabytes: dw 0 ; number of bytes in last page
+    .jmp: jmp setup
+    .sign: db 'EXE0' ; .EXE file signature
+    .extrabytes: dw 0 ; number of bytes in last block
     .totalblocks: dw 4 ; total blocks in file
-    .ddtentries: dw 0 ; number of data descriptor entries
+    .ddtentries: dw 4 ; number of data descriptor table entries
     .headsize: dw 2 ; size of header in paragraphs
-    .minalloc: dw 64 ; minimum paragraphs needed
-    .reqalloc: dw 128 ; paragraphs requested
     .ddt: dw ddt ; file offset of data descriptor table
-    .stacksize: dw 0 ; size of stack in paragraphs
-    .reserved: times 12 db 0 ; reserved
+    .bits: db 16 ; what bit mode the file is meant to be loaded in
+    .reserved: times 14 db 0 ; reserved
 
 ; ddt entry types:
 ; 1 = code segment
 ; 2 = data segment (initialized from file)
 ; 3 = data segment (empty, to be zero-initialized by loader)
+; 4 = stack segment
 
 ddt:
     .code:
@@ -27,9 +27,9 @@ ddt:
         dw 2048 ; size of code segment in bytes
         dw 0 ; relocated segment (set by loader)
     .generaldata:
-        db 3 ; data type
+        db 2 ; data type
         db 0 ; reserved
-        dw 0 ; file offset of data segment
+        dw 1024 ; file offset of data segment
         dw 512 ; size of data segment in bytes
         dw 0 ; relocated segment (set by loader)
     .moduletable:
@@ -38,12 +38,25 @@ ddt:
         dw 1536 ; file offset of module table
         dw 512 ; size of module table in bytes
         dw 0 ; relocated segment (set by loader)
+    .stack:
+        db 4 ; data type
+        db 0 ; reserved
+        dw 0 ; file offset of module table
+        dw 512 ; size of stack in bytes
+        dw 0 ; relocated segment (set by loader)
 
 setup:
+    mov ax, 0
+    int 0x16
+    mov ah, 0x0e
+    int 0x10
+    jmp setup
 
 halt:
     cli
     hlt
+
+times 1024-($-$$) db 0
 
 times 1536-($-$$) db 0
 

@@ -26,6 +26,91 @@ fat12_bpb:
         db 'COMPACTOS  ' ; volume label
         db 'FAT12   ' ; file system type
 
+fatjmp:
+    jmp 0x07c0:setup
+setup:
+    mov ax, 0x07c0
+    mov ds, ax
+    mov es, ax
+    mov ax, 0x0800
+    mov ss, ax
+    mov si, bootmsg
+    call printstr
+findkernel:
+    .findrootdir:
+        mov ax, [fat12_bpb+0x16]
+        mov bl, [fat12_bpb+0x10]
+        mul bl
+        inc ax
+        mov [resandfats], ax
+        call lbatochs
+        push dx
+    .getrootdirsectors:
+        mov ax, [fat12_bpb+0x11]
+        mov bx, 32
+        mul bx
+        mov bx, 512
+        div bx
+        mov [rootdirsize], ax
+    .loadrootdir:
+        pop dx
+        mov ah, 0x02
+        xor dh, dh
+        push ax
+        mov ax, 0x0100
+        mov es, ax
+        pop ax
+        xor bx, bx
+        int 0x13
+        jc error
+    .findkernelsetup:
+        mov di, kernelname
+        mov si, 0
+        mov cx, [fat12_bpb+0x11]
+    .findkernelloop:
+        call cmpstrings
+        jnc .foundkernel
+        add si, 32
+        loop .findkernelloop
+        jmp error
+    .foundkernel:
+        add si, 26
+        mov ax, [es:si]
+        xor bx, bx
+        mov bl, [fat12_bpb+0x0d]
+        mul bx
+        add ax, [resandfats]
+        add ax, [rootdirsize]
+        call lbatochs
+    .loadkernel:
+        mov ah, 0x02
+        mov al, 4
+        xor dh, dh
+        push ax
+        mov ax, 0x1000
+        mov es, ax
+        pop ax
+        xor bx, bx
+        int 0x13
+        jc error
+    .jumpkernel:
+        jmp 0x1000:0
+
+jmp halt
+
+error:
+    mov si, errormsg
+    call printstr
+halt:
+    cli
+    hlt
+
+bootmsg: db 'Starting compactOS...', 0
+errormsg: db 'ERROR', 0
+kernelname: db 'KERNEL  EXE', 0
+resandfats: dw 0
+rootdirsize: dw 0
+
 printstr:
     pusha
     mov bl, 0x09
@@ -40,22 +125,45 @@ printstr:
         popa
         ret
 
-fatjmp:
-    jmp 0x07c0:setup
-setup:
-    mov ax, 0x07c0
-    mov ds, ax
-    mov es, ax
-    mov ax, 0x0800
-    mov ss, ax
-    mov si, bootmsg
-    call printstr
+lbatochs:
+    push ax
+    push bx
+    .sector:
+        xor dx, dx
+        mov bx, [fat12_bpb+0x18]
+        div bx
+        inc dx
+        mov cl, dl
+    .headandcylinder:
+        xor dx, dx
+        mov bx, [fat12_bpb+0x1a]
+        div bx
+        mov dh, dl
+        mov ch, al
+        shl al, 6
+        or cl, al
+    .done:
+        pop bx
+        pop ax
+        ret
 
-halt:
-    cli
-    hlt
-
-bootmsg: db 'Starting compactOS...', 0
+cmpstrings:
+    pusha
+    .loop:
+        mov ah, [es:di]
+        mov al, [ds:si]
+        cmp ah, al
+        jne .notfound
+        cmp ah, 0
+        je .done
+        inc di
+        inc si
+        jmp .loop
+    .notfound:
+        stc
+    .done:
+        popa
+        ret
 
 times 510-($-$$) db 0
 dw 0xaa55
